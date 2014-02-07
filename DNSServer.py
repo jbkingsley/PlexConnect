@@ -320,6 +320,7 @@ def Run(cmdPipe, param):
     cfg_IP_self = param['IP_self']
     cfg_Port_DNSServer = param['CSettings'].getSetting('port_dnsserver')
     cfg_IP_DNSMaster = param['CSettings'].getSetting('ip_dnsmaster')
+    cfg_IP_DNSForward = param['CSettings'].getSetting('ip_dnsforward')
     
     try:
         DNS = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -337,6 +338,7 @@ def Run(cmdPipe, param):
         sys.exit(1)
     
     intercept = [param['HostToIntercept']]
+    forward = [param['HostToForward']]
     restrain = []
     if param['CSettings'].getSetting('prevent_atv_update')=='True':
         restrain = ['mesu.apple.com', 'appldnld.apple.com', 'appldnld.apple.com.edgesuite.net']
@@ -344,6 +346,7 @@ def Run(cmdPipe, param):
     dprint(__name__, 0, "***")
     dprint(__name__, 0, "DNSServer: Serving DNS on {0} port {1}.", cfg_IP_self, cfg_Port_DNSServer)
     dprint(__name__, 1, "intercept: {0} => {1}", intercept, cfg_IP_self)
+    dprint(__name__, 1, "DNSforward: {0} => {1}", forward, cfg_IP_DNSForward)
     dprint(__name__, 1, "restrain: {0} => 127.0.0.1", restrain)
     dprint(__name__, 1, "forward other to higher level DNS: "+cfg_IP_DNSMaster)
     dprint(__name__, 0, "***")
@@ -386,6 +389,12 @@ def Run(cmdPipe, param):
                     paket+='\x00\x01\x00\x01\x00\x00\x00\x3c\x00\x04'    # response type, ttl and resource data length -> 4 bytes
                     paket+=str.join('',map(lambda x: chr(int(x)), cfg_IP_self.split('.'))) # 4bytes of IP
                     dprint(__name__, 1, "-> DNS response: "+cfg_IP_self)
+                    
+                elif domain in forward:
+                    dprint(__name__, 1, "***Special forward request")
+                    DNS_forward.sendto(data, (cfg_IP_DNSForward, 53))
+                    paket, addr_master = DNS_forward.recvfrom(1024)
+                    dprint(__name__, 1, "-> DNS response from special DNS")
                 
                 elif domain in restrain:
                     dprint(__name__, 1, "***restrain request")
@@ -402,7 +411,7 @@ def Run(cmdPipe, param):
                     dprint(__name__, 1, "-> DNS response: "+cfg_IP_self)
                 
                 else:
-                    dprint(__name__, 1, "***forward request")
+                    dprint(__name__, 1, "***Normal forward request")
                     DNS_forward.sendto(data, (cfg_IP_DNSMaster, 53))
                     paket, addr_master = DNS_forward.recvfrom(1024)
                     # todo: double check: ID has to be the same!
